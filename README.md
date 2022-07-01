@@ -42,26 +42,26 @@ python manage.py migrate
 
 4. This package provides three endpoints, which can be included by including ``django_rest_passwordreset.urls`` in your ``urls.py`` as follows:
 ```python
-from django.conf.urls import url, include
-
+from django.urls import path, include
 
 urlpatterns = [
     ...
-    url(r'^api/password_reset/', include('django_rest_passwordreset.urls', namespace='password_reset')),
+    path(r'^api/password_reset/', include('django_rest_passwordreset.urls', namespace='password_reset')),
     ...
 ]
 ```
-**Note**: You can adapt the url to your needs.
+**Note**: You can adapt the URL to your needs.
 
 ### Endpoints
 
 The following endpoints are provided:
 
- * `POST ${API_URL}/reset_password/` - request a reset password token by using the ``email`` parameter
- * `POST ${API_URL}/reset_password/confirm/` - using a valid ``token``, the users password is set to the provided ``password``
- * `POST ${API_URL}/reset_password/validate_token/` - will return a 200 if a given ``token`` is valid
+ * `POST ${API_URL}/` - request a reset password token by using the ``email`` parameter
+ * `POST ${API_URL}/confirm/` - using a valid ``token``, the users password is set to the provided ``password``
+ * `POST ${API_URL}/validate_token/` - will return a 200 if a given ``token`` is valid
  
-where `${API_URL}/` is the url specified in your *urls.py* (e.g., `api/` as in the example above)
+where `${API_URL}/` is the url specified in your *urls.py* (e.g., `api/password_reset/` as in the example above)
+
  
 ### Signals
 
@@ -132,7 +132,7 @@ If you want to test this locally, I recommend using some kind of fake mailserver
 
 # Configuration / Settings
 
-The following settings can be set in Djangos ``settings.py`` file:
+The following settings can be set in Django ``settings.py`` file:
 
 * `DJANGO_REST_MULTITOKENAUTH_RESET_TOKEN_EXPIRY_TIME` - time in hours about how long the token is active (Default: 24)
 
@@ -273,6 +273,39 @@ django-rest-passwordreset Version | Django Versions | Django Rest Framework Vers
 ## Documentation / Browsable API
 
 This package supports the [DRF auto-generated documentation](https://www.django-rest-framework.org/topics/documenting-your-api/) (via `coreapi`) as well as the [DRF browsable API](https://www.django-rest-framework.org/topics/browsable-api/).
+
+To add the endpoints to the browsable API, you can use a helper function in your `urls.py` file:
+```python
+from rest_framework.routers import DefaultRouter
+from django_rest_passwordreset.urls import add_reset_password_urls_to_router
+
+router = DefaultRouter()
+add_reset_password_urls_to_router(router, base_path='api/auth/passwordreset')
+```
+
+Alternatively you can import the ViewSets manually and customize the routes for your setup:
+```python
+from rest_framework.routers import DefaultRouter
+from django_rest_passwordreset.views import ResetPasswordValidateTokenViewSet, ResetPasswordConfirmViewSet, \
+    ResetPasswordRequestTokenViewSet
+
+router = DefaultRouter()
+router.register(
+    r'api/auth/passwordreset/validate_token',
+    ResetPasswordValidateTokenViewSet,
+    basename='reset-password-validate'
+)
+router.register(
+    r'api/auth/passwordreset/confirm',
+    ResetPasswordConfirmViewSet,
+    basename='reset-password-confirm'
+)
+router.register(
+    r'api/auth/passwordreset/',
+    ResetPasswordRequestTokenViewSet,
+    basename='reset-password-request'
+)
+```
 
 ![drf_browsable_email_validation](docs/browsable_api_email_validation.png "Browsable API E-Mail Validation")
 

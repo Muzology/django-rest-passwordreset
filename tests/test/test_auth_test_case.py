@@ -1,9 +1,10 @@
 import json
-from django.test import override_settings
+
 from django.contrib.auth.models import User
-from django.db.models import Q
+from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
+
 from django_rest_passwordreset.models import ResetPasswordToken
 from tests.test.helpers import HelperMixin, patch
 
@@ -12,12 +13,14 @@ class AuthTestCase(APITestCase, HelperMixin):
     """
     Several Test Cases for the Multi Auth Token Django App
     """
+
     def setUp(self):
         self.setUpUrls()
         self.user1 = User.objects.create_user("user1", "user1@mail.com", "secret1")
         self.user2 = User.objects.create_user("user2", "user2@mail.com", "secret2")
         self.user3 = User.objects.create_user("user3@mail.com", "not-that-mail@mail.com", "secret3")
         self.user4 = User.objects.create_user("user4", "user4@mail.com")
+        self.user5 = User.objects.create_user("user5", "uѕer5@mail.com", "secret5")  # email contains kyrillic s
 
     def test_try_reset_password_email_does_not_exist(self):
         """ Tests requesting a token for an email that does not exist """
@@ -26,6 +29,13 @@ class AuthTestCase(APITestCase, HelperMixin):
         decoded_response = json.loads(response.content.decode())
         # response should have "email" in it
         self.assertTrue("email" in decoded_response)
+
+    def test_unicode_email_reset(self):
+        response = self.rest_do_request_reset_token(email="uѕer5@mail.com")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        decoded_response = json.loads(response.content.decode())
+        self.assertEqual(decoded_response.get("email")[0], 'Enter a valid email address.')
 
     @patch('django_rest_passwordreset.signals.reset_password_token_created.send')
     def test_validate_token(self, mock_reset_password_token_created):
@@ -72,7 +82,7 @@ class AuthTestCase(APITestCase, HelperMixin):
         # try to validate an invalid token
         response = self.rest_do_validate_token("not_a_valid_token")
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
-        
+
         # there should be zero tokens
         self.assertEqual(ResetPasswordToken.objects.all().count(), 0)
 
@@ -224,13 +234,12 @@ class AuthTestCase(APITestCase, HelperMixin):
         # connect signal
         # we need to check whether the signal is getting called
 
-
         # create a token for user 1
         response = self.rest_do_request_reset_token(email="user1@mail.com")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(ResetPasswordToken.objects.all().count(), 1)
         self.assertTrue(mock_reset_password_token_created.called)
-        self.assertEquals(mock_reset_password_token_created.call_count, 1)
+        self.assertEqual(mock_reset_password_token_created.call_count, 1)
         token1 = mock_reset_password_token_created.call_args[1]['reset_password_token']
 
         # create another token for user 2
@@ -238,7 +247,7 @@ class AuthTestCase(APITestCase, HelperMixin):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         tokens = ResetPasswordToken.objects.all()
         self.assertEqual(tokens.count(), 2)
-        self.assertEquals(mock_reset_password_token_created.call_count, 2)
+        self.assertEqual(mock_reset_password_token_created.call_count, 2)
         token2 = mock_reset_password_token_created.call_args[1]['reset_password_token']
 
         # validate that those two tokens are different
@@ -269,7 +278,7 @@ class AuthTestCase(APITestCase, HelperMixin):
 
         # try to reset again with token2 (should not work)
         response = self.rest_do_reset_password_with_token(token2.key, "secret2_fake_new")
-        self.assertEquals(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
         # user 2 should still be able to login with "secret2_new" now
         self.assertTrue(
@@ -296,10 +305,11 @@ class AuthTestCase(APITestCase, HelperMixin):
 
         # verify that the reset_password_token_created signal was fired
         self.assertTrue(mock_reset_password_token_created.called)
-        self.assertEquals(mock_reset_password_token_created.call_count, 1)
+        self.assertEqual(mock_reset_password_token_created.call_count, 1)
 
         token1 = mock_reset_password_token_created.call_args[1]['reset_password_token']
-        self.assertNotEqual(token1.key, "", msg="Verify that the reset_password_token of the reset_password_Token_created signal is not empty")
+        self.assertNotEqual(token1.key, "",
+                            msg="Verify that the reset_password_token of the reset_password_Token_created signal is not empty")
 
         # verify that the other two signals have not yet been called
         self.assertFalse(mock_post_password_reset.called)
@@ -315,12 +325,13 @@ class AuthTestCase(APITestCase, HelperMixin):
 
     @override_settings(DJANGO_REST_PASSWORDRESET_NO_INFORMATION_LEAKAGE=True)
     def test_try_reset_password_email_does_not_exist_no_leakage_enabled(self):
-        """ 
+        """
         Tests requesting a token for an email that does not exist when
         DJANGO_REST_PASSWORDRESET_NO_INFORMATION_LEAKAGE == True
-        """ 
+        """
         response = self.rest_do_request_reset_token(email="foobar@doesnotexist.com")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
     def test_user_without_password(self):
         """ Tests requesting a token for an email without a password doesn't work"""
         response = self.rest_do_request_reset_token(email="user4@mail.com")
@@ -334,7 +345,6 @@ class AuthTestCase(APITestCase, HelperMixin):
     def test_user_without_password_where_not_required(self, mock_reset_password_token_created):
         """ Tests requesting a token for an email without a password works when not required"""
         response = self.rest_do_request_reset_token(email="user4@mail.com")
-        decoded_response = json.loads(response.content.decode())
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # check that the signal was sent once
         self.assertTrue(mock_reset_password_token_created.called)
@@ -372,4 +382,3 @@ class AuthTestCase(APITestCase, HelperMixin):
             self.django_check_login("user4", "new_secret"),
             msg="User 4 should be able to login with the modified credentials"
         )
-
